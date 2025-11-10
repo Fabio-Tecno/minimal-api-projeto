@@ -1,13 +1,20 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using projeto_minimal_api.Dominio.DTOs;
+using projeto_minimal_api.Dominio.Entidades;
 using projeto_minimal_api.Dominio.Interfaces;
+using projeto_minimal_api.Dominio.ModelViews;
 using projeto_minimal_api.Dominio.Servicos;
 using projeto_minimal_api.Infraestrutura;
 
+#region Builder
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IAdministradorServico, AdministradorServico>();
+builder.Services.AddScoped<IVeiculoServico,VeiculoServico>();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<DbContexto>(options =>
 {
@@ -19,17 +26,72 @@ builder.Services.AddDbContext<DbContexto>(options =>
 });
 
 var app = builder.Build();
+#endregion
+
+#region Home
+app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
+#endregion
+
+#region Administradores
+app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) => {
+  if (administradorServico.Login(loginDTO) != null)
+    return Results.Ok("Login com sucesso");
+  else
+    return Results.Unauthorized();
+}).WithTags("Administrador");
+#endregion
+
+#region Veiculos
+app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTODTO, IVeiculoServico veiculoServico) =>
+{
+
+  var veiculo = new Veiculo
+  {
+
+    Nome = veiculoDTODTO.Nome,
+    Marca = veiculoDTODTO.Marca,
+    Ano = veiculoDTODTO.Ano
+  };
+
+  veiculoServico.Incluir(veiculo);
+  return Results.Created($"/veiculo/{veiculo.Id}", veiculo);
+
+}).WithTags("Veiculos");
+
+app.MapGet("/veiculos", ([FromQuery] int? pagina, IVeiculoServico veiculoServico) =>
+{
+  var veiculos = veiculoServico.Todos(pagina);
+  return Results.Ok(veiculos);
+}).WithTags("Veiculos");
+
+app.MapGet("/veiculos/{id}", ([FromRoute] int id, IVeiculoServico veiculoServico) =>
+{
+  var veiculo = veiculoServico.BuscarPorId(id);
+  if (veiculo == null) return Results.NotFound();
+  return Results.Ok(veiculo);
+}).WithTags("Veiculos");
+
+app.MapPut("/veiculos/{id}", ([FromRoute] int id, VeiculoDTO VeiculoDTO, IVeiculoServico veiculoServico) =>
+{
+  var veiculo = veiculoServico.BuscarPorId(id);
+  if (veiculo == null) return Results.NotFound();
+
+  veiculo.Nome = VeiculoDTO.Nome;
+  veiculo.Marca = VeiculoDTO.Marca;
+  veiculo.Ano = VeiculoDTO.Ano;
+
+    veiculoServico.Atualizar(veiculo);
+  
+  return Results.Ok(veiculo);
+}).WithTags("Veiculos");
 
 
-app.MapGet("/", () => "Hello World!");
 
-app.MapPost("/login", ([FromBody]LoginDTO loginDTO, IAdministradorServico administradorServico) => {
-    if (administradorServico.Login(loginDTO) != null)
-        return Results.Ok("Login com sucesso");
-    else
-        return Results.Unauthorized();
-});
+#endregion
 
-
+#region App
+app.UseSwagger();
+app.UseSwaggerUI();
 app.Run();
+#endregion
 
